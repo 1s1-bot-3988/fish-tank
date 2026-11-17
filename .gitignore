@@ -10,6 +10,7 @@ dy/
 # 录屏素材（太大，不是项目文件）
 *.mp4
 *.mov
+!yanshishiping1-1080p.mp4
 
 # 早期的对照 demo，不属于鱼缸本体
 compare.html
