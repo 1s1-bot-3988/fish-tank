@@ -2,6 +2,7 @@
 _tmp/
 _tools/
 _edge2/
+.tmp/
 dy/
 *.log
 *.tmp
