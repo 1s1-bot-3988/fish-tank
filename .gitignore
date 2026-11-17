@@ -1,0 +1,20 @@
+# 临时 / 工具 / 缓存 —— 不进仓库
+_tmp/
+_tools/
+_edge2/
+dy/
+*.log
+*.tmp
+
+# 录屏素材（太大，不是项目文件）
+*.mp4
+*.mov
+
+# 早期的对照 demo，不属于鱼缸本体
+compare.html
+preview.png
+
+# 系统垃圾
+Thumbs.db
+.DS_Store
+desktop.ini

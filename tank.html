@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>水族箱 · 3D</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#07090b; }
+  body { font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif; }
+  canvas { display:block; }
+
+  #hud {
+    position:fixed; left:50%; bottom:26px; transform:translateX(-50%);
+    display:flex; gap:2px; padding:8px 10px;
+    background:rgba(16,20,24,.62);
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:14px;
+    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    box-shadow:0 10px 40px -12px #000;
+    z-index:10; user-select:none;
+  }
+  .tool {
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    padding:7px 11px; border-radius:10px; cursor:pointer;
+    color:#8d99a3; font-size:10.5px; letter-spacing:.06em;
+    transition:background .18s, color .18s;
+    white-space:nowrap;
+  }
+  .tool svg { width:17px; height:17px; stroke:currentColor; fill:none; stroke-width:1.6; }
+  .tool:hover { background:rgba(255,255,255,.06); color:#cfd8de; }
+  .tool.active { background:rgba(120,210,190,.14); color:#7fe3c9; }
+  .tool.sep { width:1px; padding:0; margin:0 6px; background:rgba(255,255,255,.08); cursor:default; }
+  .tool.sep:hover { background:rgba(255,255,255,.08); }
+
+  .hint {
+    position:fixed; left:50%; bottom:104px; transform:translateX(-50%);
+    font-size:11.5px; color:rgba(180,196,204,.42); letter-spacing:.08em;
+    pointer-events:none; z-index:10;
+  }
+
+  #stats {
+    position:fixed; left:18px; top:16px; z-index:10;
+    font:11px/1.7 ui-monospace,Consolas,monospace;
+    color:rgba(150,200,190,.55); display:none; white-space:pre;
+  }
+
+  #toast {
+    position:fixed; left:50%; top:34px; transform:translateX(-50%);
+    padding:8px 18px; border-radius:9px;
+    background:rgba(20,26,30,.85); border:1px solid rgba(255,255,255,.08);
+    color:#cfe6df; font-size:12.5px; letter-spacing:.05em;
+    opacity:0; transition:opacity .3s; pointer-events:none; z-index:20;
+  }
+  #toast.show { opacity:1; }
+</style>
+</head>
+<body>
+
+<div id="stats"></div>
+<div class="hint">按住鼠标左键拖动：旋转视角 · 滚轮：缩放</div>
+
+<div id="hud">
+  <div class="tool" data-act="algae">
+    <svg viewBox="0 0 24 24"><path d="M12 21c0-6 0-9 0-12"/><path d="M12 9c-3 0-5-2-5-5 3 0 5 2 5 5z"/><path d="M12 13c3 0 5-2 5-5-3 0-5 2-5 5z"/></svg>
+    <span>藻类</span>
+  </div>
+  <div class="tool" data-act="fish">
+    <svg viewBox="0 0 24 24"><path d="M3 12c4-5 9-5 13 0-4 5-9 5-13 0z"/><path d="M16 12l5-3v6l-5-3z"/><circle cx="7" cy="11.4" r=".7" fill="currentColor" stroke="none"/></svg>
+    <span>生物</span>
+  </div>
+  <div class="tool" data-act="env">
+    <svg viewBox="0 0 24 24"><path d="M3 17c2-3 4-3 6 0s4 3 6 0 4-3 6 0"/><circle cx="12" cy="7" r="2.6"/></svg>
+    <span>环境</span>
+  </div>
+  <div class="tool" data-act="perf">
+    <svg viewBox="0 0 24 24"><path d="M4 19V9"/><path d="M9 19V5"/><path d="M14 19v-7"/><path d="M19 19V8"/></svg>
+    <span>性能</span>
+  </div>
+  <div class="tool" data-act="view">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z"/></svg>
+    <span>视角</span>
+  </div>
+  <div class="tool" data-act="scenery">
+    <svg viewBox="0 0 24 24"><path d="M3 19l5.5-9 3 4.6 2.2-3.2L21 19H3z"/><path d="M3.5 3.5l17 17"/></svg>
+    <span>造景</span>
+  </div>
+  <div class="tool sep"></div>
+  <div class="tool" data-act="reset">
+    <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v4h4"/></svg>
+    <span>重置</span>
+  </div>
+  <div class="tool" data-act="preset">
+    <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg>
+    <span>方案</span>
+  </div>
+  <div class="tool" data-act="settings">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.8"/><path d="M12 2.6v3M12 18.4v3M2.6 12h3M18.4 12h3M5.2 5.2l2.1 2.1M16.7 16.7l2.1 2.1M18.8 5.2l-2.1 2.1M7.3 16.7l-2.1 2.1"/></svg>
+    <span>设置</span>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="lib/three.min.js"></script>
+<script src="lib/OrbitControls.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  window.addEventListener('error', function (e) {
+    var d = document.getElementById('errbox');
+    if (!d) {
+      d = document.createElement('pre');
+      d.id = 'errbox';
+      d.style.cssText = 'position:fixed;left:14px;top:14px;z-index:99;color:#ff8a8a;font:12px/1.6 ui-monospace,Consolas,monospace;white-space:pre-wrap;max-width:88vw;background:rgba(30,10,10,.8);padding:10px;border-radius:8px';
+      document.body.appendChild(d);
+    }
+    d.textContent += 'ERR: ' + (e.message || e.type) + ' @' + (e.filename || '').split('/').pop() + ':' + (e.lineno || '') + '\n';
+  });
+
+  // ========== 基础参数 ==========
+  const TANK = { w: 12, h: 6.4, d: 5, glass: 0.08 };
+  const SAND_TOP = -0.55;
+
+  let renderer, scene, camera, controls, clock;
+  let waterMat, grassMesh, tallGrassGroup, fishGroup, tankGroup;
+  const sceneryObjects = [];
+  let sceneryHidden = false;
+  let rafId = null;
+  let frameCount = 0, fpsTime = 0, fps = 0, showStats = false;
+  const tmpV = new THREE.Vector3();
+
+  // 简易噪声
+  function hash2(x, y) {
+    let h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+    return h - Math.floor(h);
+  }
+  function noise2(x, y) {
+    const xi = Math.floor(x), yi = Math.floor(y);
+    const xf = x - xi, yf = y - yi;
+    const u = xf * xf * (3 - 2 * xf);
+    const v = yf * yf * (3 - 2 * yf);
+    const a = hash2(xi, yi), b = hash2(xi + 1, yi);
+    const c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
+    return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
+  }
+  function fbm(x, y) {
+    let s = 0, a = 0.5;
+    for (let i = 0; i < 4; i++) { s += noise2(x, y) * a; x *= 2.03; y *= 2.03; a *= 0.5; }
+    return s;
+  }
+
+  // ========== 初始化 ==========
+  function init() {
+    const container = document.body;
+
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.92;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x05070a);
+    scene.fog = new THREE.FogExp2(0x04080a, 0.011);
+
+    camera = new THREE.PerspectiveCamera(34, window.innerWidth / window.innerHeight, 0.1, 200);
+    camera.position.set(0.4, 3.1, 16.8);
+
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 1.65, 0);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.07;
+    controls.minDistance = 9;
+    controls.maxDistance = 30;
+    controls.minPolarAngle = Math.PI * 0.22;
+    controls.maxPolarAngle = Math.PI * 0.60;
+    controls.enablePan = false;
+
+    clock = new THREE.Clock();
+
+    buildLights();
+    buildRoom();
+    buildTank();
+    buildSubstrate();
+    buildGrass();
+    buildTallPlants();
+    buildRocks();
+    buildWood();
+    buildFish();
+    buildWater();
+
+    window.addEventListener('resize', onResize);
+    bindUI();
+    if (location.hash === '#hide') setScenery(true);
+    animate();
+  }
+
+  // ========== 灯光 ==========
+  function buildLights() {
+    scene.add(new THREE.AmbientLight(0x1a262b, 0.55));
+
+    const key = new THREE.DirectionalLight(0xcfe8f5, 0.85);
+    key.position.set(-2, 12, 5);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.camera.left = -10; key.shadow.camera.right = 10;
+    key.shadow.camera.top = 8; key.shadow.camera.bottom = -8;
+    key.shadow.camera.near = 1; key.shadow.camera.far = 30;
+    key.shadow.bias = -0.0012;
+    scene.add(key);
+
+    // 缸内顶灯（暖一点，给水草和鱼）
+    const top = new THREE.PointLight(0xcfeaff, 0.55, 20, 2);
+    top.position.set(0, 5.2, 0.4);
+    scene.add(top);
+
+    const fill = new THREE.DirectionalLight(0x3f6f7a, 0.30);
+    fill.position.set(6, 1.5, 8);
+    scene.add(fill);
+
+    // 背后一点冷光，勾玻璃边
+    const rim = new THREE.DirectionalLight(0x5fc0b4, 0.22);
+    rim.position.set(0, 2, -9);
+    scene.add(rim);
+  }
+
+  // ========== 房间 ==========
+  function buildRoom() {
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(90, 90),
+      new THREE.MeshStandardMaterial({ color: 0x0b0e10, roughness: 0.95, metalness: 0 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -1.05;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // 台座
+    const base = new THREE.Mesh(
+      new THREE.BoxGeometry(TANK.w + 1.4, 0.5, TANK.d + 1.1),
+      new THREE.MeshStandardMaterial({ color: 0x15191c, roughness: 0.75, metalness: 0.1 })
+    );
+    base.position.y = -0.85;
+    base.receiveShadow = true;
+    scene.add(base);
+
+    // 背景幕（深色的墙）
+    const back = new THREE.Mesh(
+      new THREE.PlaneGeometry(60, 30),
+      new THREE.MeshBasicMaterial({ color: 0x05080a })
+    );
+    back.position.set(0, 6, -16);
+    scene.add(back);
+  }
+
+  // ========== 玻璃缸 ==========
+  function buildTank() {
+    tankGroup = new THREE.Group();
+    const hw = TANK.w / 2, hh = TANK.h / 2, hd = TANK.d / 2;
+    const g = TANK.glass;
+
+    const glassMat = new THREE.MeshPhysicalMaterial({
+      color: 0xdff4ff,
+      metalness: 0,
+      roughness: 0.04,
+      transparent: true,
+      opacity: 0.10,
+      clearcoat: 1,
+      clearcoatRoughness: 0.03,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+
+    const panels = [
+      // 前
+      { size: [TANK.w, TANK.h], pos: [0, 0, hd] },
+      // 后
+      { size: [TANK.w, TANK.h], pos: [0, 0, -hd] },
+      // 左
+      { size: [TANK.d, TANK.h], pos: [-hw, 0, 0], rotY: Math.PI / 2 },
+      // 右
+      { size: [TANK.d, TANK.h], pos: [hw, 0, 0], rotY: Math.PI / 2 },
+    ];
+
+    panels.forEach(p => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(p.size[0], p.size[1]), glassMat);
+      m.position.set(p.pos[0], p.pos[1], p.pos[2]);
+      if (p.rotY) m.rotation.y = p.rotY;
+      tankGroup.add(m);
+    });
+
+    // 底玻璃
+    const bottom = new THREE.Mesh(new THREE.BoxGeometry(TANK.w, g, TANK.d), glassMat);
+    bottom.position.y = -hh;
+    tankGroup.add(bottom);
+
+    // 缸底那一圈深色边框
+    const frameMat = new THREE.MeshStandardMaterial({ color: 0x12171a, roughness: 0.6, metalness: 0.25 });
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(TANK.w + 0.16, 0.12, TANK.d + 0.16), frameMat);
+    frame.position.y = -hh - 0.02;
+    frame.castShadow = true;
+    tankGroup.add(frame);
+
+    // 玻璃边缘高光
+    const edgeMat = new THREE.LineBasicMaterial({ color: 0xaef0e8, transparent: true, opacity: 0.55 });
+    const boxEdges = new THREE.EdgesGeometry(new THREE.BoxGeometry(TANK.w, TANK.h, TANK.d));
+    const edges = new THREE.LineSegments(boxEdges, edgeMat);
+    tankGroup.add(edges);
+
+    // 顶部水面（稍低于缸沿）
+    const waterGeo = new THREE.PlaneGeometry(TANK.w - 0.04, TANK.d - 0.04, 40, 24);
+    waterGeo.rotateX(-Math.PI / 2);
+    waterMat = new THREE.MeshPhysicalMaterial({
+      color: 0x7fd6cf,
+      metalness: 0,
+      roughness: 0.12,
+      transparent: true,
+      opacity: 0.18,
+      clearcoat: 1,
+      clearcoatRoughness: 0.06,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const water = new THREE.Mesh(waterGeo, waterMat);
+    water.position.y = TANK.h / 2 - 0.22;
+    tankGroup.add(water);
+    tankGroup.userData.water = water;
+    tankGroup.userData.waterBase = waterGeo.attributes.position.array.slice();
+
+    scene.add(tankGroup);
+  }
+
+  // ========== 底砂 ==========
+  function buildSubstrate() {
+    const W = TANK.w - 0.12, D = TANK.d - 0.12;
+    const geo = new THREE.PlaneGeometry(W, D, 90, 60);
+    geo.rotateX(-Math.PI / 2);
+
+    const pos = geo.attributes.position;
+    const col = [];
+    const c1 = new THREE.Color(0x241a12);
+    const c2 = new THREE.Color(0x3a2a1c);
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), z = pos.getZ(i);
+      const mound = Math.cos((x / W) * Math.PI * 1.15) * Math.cos((z / D) * Math.PI * 0.75) * 0.42;
+      const n = (fbm(x * 0.9 + 10, z * 0.9 + 20) - 0.5) * 0.18;
+      pos.setY(i, SAND_TOP + mound + n);
+      const g = 0.35 + fbm(x * 4, z * 4) * 0.65;
+      const c = c1.clone().lerp(c2, g);
+      col.push(c.r, c.g, c.b);
+    }
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    geo.computeVertexNormals();
+
+    const mat = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.96,
+      metalness: 0.0
+    });
+    // 焦散注入
+    attachCaustics(mat, 0.55);
+
+    const sand = new THREE.Mesh(geo, mat);
+    sand.receiveShadow = true;
+    sand.name = 'sand';
+    scene.add(sand);
+    sceneryObjects.push(sand);
+
+    // 砂层侧面（让前面能看到厚度）
+    const sideMat = new THREE.MeshStandardMaterial({ color: 0x120d09, roughness: 0.98 });
+    const front = new THREE.Mesh(new THREE.BoxGeometry(W, 0.42, 0.08), sideMat);
+    front.position.set(0, SAND_TOP - 0.21 + 0.06, D / 2 - 0.02);
+    scene.add(front);
+    sceneryObjects.push(front);
+  }
+
+  // 焦散：给材质注入时间驱动的光斑
+  function attachCaustics(mat, strength) {
+    mat.userData.uTime = { value: 0 };
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms.uTime = mat.userData.uTime;
+      shader.uniforms.uCausticStrength = { value: strength };
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vWorldPosC;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWorldPosC = (modelMatrix * vec4(position,1.0)).xyz;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', `#include <common>
+          varying vec3 vWorldPosC;
+          uniform float uTime;
+          uniform float uCausticStrength;
+          float hash21(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
+          float caustic(vec2 uv, float t){
+            vec2 p = uv * 1.7;
+            float v = 0.0;
+            for(int i=1;i<=3;i++){
+              float fi = float(i);
+              v += sin(p.x*fi*1.7 + t*(0.55+fi*0.22) + sin(p.y*fi*1.3 - t*0.45))
+                 * cos(p.y*fi*1.9 - t*(0.48+fi*0.17) + cos(p.x*fi*1.1 + t*0.33));
+            }
+            v /= 3.0;
+            return pow(clamp(v*0.5+0.5, 0.0, 1.0), 3.0) * 2.6;
+          }`)
+        .replace('#include <dithering_fragment>', `#include <dithering_fragment>
+          float cs = caustic(vWorldPosC.xz * 0.42, uTime * 0.55);
+          gl_FragColor.rgb *= (0.82 + cs * uCausticStrength);`);
+    };
+    mat.needsUpdate = true;
+  }
+
+  // ========== 地毯草 ==========
+  function bladeGeometry(height, width, segs, curl) {
+    const geo = new THREE.BufferGeometry();
+    const verts = [], idx = [], norms = [], uvs = [];
+    for (let i = 0; i <= segs; i++) {
+      const t = i / segs;
+      const y = t * height;
+      const bend = Math.pow(t, 1.7) * curl;
+      const w = width * (1 - t * 0.82);
+      verts.push(-w, y, bend);
+      verts.push(w, y, bend);
+      norms.push(0, 0.4, 1, 0, 0.4, 1);
+      uvs.push(0, t, 1, t);
+    }
+    for (let i = 0; i < segs; i++) {
+      const a = i * 2, b = i * 2 + 1, c = i * 2 + 2, d = i * 2 + 3;
+      idx.push(a, b, c, b, d, c);
+    }
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(norms, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setIndex(idx);
+    return geo;
+  }
+
+  function buildGrass() {
+    const geo = bladeGeometry(0.46, 0.028, 4, 0.16);
+    const count = 9000;
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      vertexColors: false,
+      roughness: 0.82,
+      metalness: 0,
+      side: THREE.DoubleSide
+    });
+
+    // 每实例颜色（深绿到亮绿）
+    const mesh = new THREE.InstancedMesh(geo, mat, count);
+    const dummy = new THREE.Object3D();
+    const color = new THREE.Color();
+    const gDark = new THREE.Color(0x10310f);
+    const gLight = new THREE.Color(0x46912c);
+
+    const W = TANK.w - 0.5, D = TANK.d - 1.3;
+    let placed = 0, guard = 0;
+    while (placed < count && guard < count * 6) {
+      guard++;
+      const x = (Math.random() - 0.5) * W;
+      const z = (Math.random() - 0.5) * D;
+      // 避开中间偏前的开阔区（留出沉木和石头的空）
+      const mound = Math.cos((x / W) * Math.PI * 1.15) * Math.cos((z / D) * Math.PI * 0.75) * 0.42;
+      const y = SAND_TOP + mound + (fbm(x * 0.9 + 10, z * 0.9 + 20) - 0.5) * 0.18;
+      if (y < SAND_TOP - 0.3) continue;
+
+      dummy.position.set(x, y, z);
+      dummy.rotation.y = Math.random() * Math.PI * 2;
+      const s = 0.55 + Math.random() * 0.85;
+      dummy.scale.set(0.7 + Math.random() * 0.6, s, 0.7 + Math.random() * 0.6);
+      dummy.rotation.z = (Math.random() - 0.5) * 0.25;
+      dummy.updateMatrix();
+      mesh.setMatrixAt(placed, dummy.matrix);
+
+      const t = Math.random();
+      color.copy(gDark).lerp(gLight, t * t);
+      mesh.setColorAt(placed, color);
+      placed++;
+    }
+    mesh.count = placed;
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    mesh.frustumCulled = false;
+    mesh.name = 'grass';
+    grassMesh = mesh;
+    scene.add(mesh);
+    sceneryObjects.push(mesh);
+  }
+
+  // ========== 长叶水草 ==========
+  function buildTallPlants() {
+    tallGrassGroup = new THREE.Group();
+    const clusters = [
+      { x: -4.1, z: 0.6, n: 34, h: 2.6, spread: 0.85, color: 0x2f7d2a },
+      { x: -3.2, z: -1.1, n: 18, h: 2.1, spread: 0.5, color: 0x255f22 },
+      { x: 3.9, z: 0.4, n: 30, h: 2.4, spread: 0.75, color: 0x2e7a2c },
+      { x: 3.0, z: -1.3, n: 16, h: 1.8, spread: 0.45, color: 0x1f5720 }
+    ];
+
+    clusters.forEach(cl => {
+      const geo = bladeGeometry(cl.h, 0.045, 6, 0.55);
+      const mat = new THREE.MeshStandardMaterial({
+        color: cl.color,
+        roughness: 0.7,
+        metalness: 0,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.96
+      });
+      const mesh = new THREE.InstancedMesh(geo, mat, cl.n);
+      const dummy = new THREE.Object3D();
+      for (let i = 0; i < cl.n; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.random() * cl.spread;
+        const x = cl.x + Math.cos(a) * r;
+        const z = cl.z + Math.sin(a) * r;
+        const y = SAND_TOP + Math.cos((x / (TANK.w - 0.5)) * Math.PI * 1.15) * Math.cos((z / (TANK.d - 0.5)) * Math.PI * 0.75) * 0.42;
+        dummy.position.set(x, y, z);
+        dummy.rotation.y = a + (Math.random() - 0.5) * 0.6;
+        dummy.rotation.z = (Math.random() - 0.5) * 0.16;
+        const s = 0.7 + Math.random() * 0.7;
+        dummy.scale.set(0.8 + Math.random() * 0.4, s, 1);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+      }
+      mesh.frustumCulled = false;
+      tallGrassGroup.add(mesh);
+    });
+
+    scene.add(tallGrassGroup);
+    sceneryObjects.push(tallGrassGroup);
+  }
+
+  // ========== 石头 ==========
+  function buildRocks() {
+    const rocks = [
+      { x: 2.5, z: 0.9, r: 0.95, s: [1.25, 1.05, 1.0], c: 0x3b4147 },
+      { x: 3.6, z: -0.9, r: 0.75, s: [1.0, 1.15, 0.95], c: 0x343a40 },
+      { x: -0.9, z: -1.4, r: 0.55, s: [1.3, 0.85, 1.1], c: 0x2f3539 },
+      { x: -3.5, z: 1.4, r: 0.45, s: [1.0, 0.9, 1.0], c: 0x353b3f }
+    ];
+
+    rocks.forEach(r => {
+      const geo = new THREE.IcosahedronGeometry(r.r, 3);
+      const pos = geo.attributes.position;
+      const v = new THREE.Vector3();
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        const n = fbm(v.x * 2.2 + r.x, v.z * 2.2 + r.z) * 0.34 + fbm(v.x * 6 - 3, v.y * 6) * 0.12;
+        v.multiplyScalar(1 + n - 0.2);
+        v.x *= r.s[0]; v.y *= r.s[1]; v.z *= r.s[2];
+        pos.setXYZ(i, v.x, v.y, v.z);
+      }
+      geo.computeVertexNormals();
+
+      const mat = new THREE.MeshStandardMaterial({
+        color: r.c, roughness: 0.92, metalness: 0.03, flatShading: false
+      });
+      attachCaustics(mat, 0.35);
+
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(r.x, SAND_TOP + r.r * r.s[1] * 0.55, r.z);
+      m.rotation.y = Math.random() * Math.PI;
+      m.castShadow = true;
+      m.receiveShadow = true;
+      scene.add(m);
+      sceneryObjects.push(m);
+    });
+  }
+
+  // ========== 沉木 ==========
+  function buildWood() {
+    const mat = new THREE.MeshStandardMaterial({ color: 0x2a1d14, roughness: 0.95, metalness: 0.02 });
+    attachCaustics(mat, 0.28);
+
+    function branch(start, end, r0, r1, bend) {
+      const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+      mid.y += bend;
+      const curve = new THREE.CatmullRomCurve3([start, mid, end]);
+      const geo = new THREE.TubeGeometry(curve, 14, r0, 6, false);
+      const m = new THREE.Mesh(geo, mat);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      scene.add(m);
+      sceneryObjects.push(m);
+      return m;
+    }
+
+    const base = new THREE.Vector3(1.4, SAND_TOP + 0.15, -0.6);
+    branch(base, new THREE.Vector3(0.4, SAND_TOP + 1.5, -1.0), 0.30, 0.2, 0.25);
+    branch(new THREE.Vector3(0.9, SAND_TOP + 0.9, -0.85), new THREE.Vector3(-0.6, SAND_TOP + 1.9, -0.3), 0.18, 0.1, 0.3);
+    branch(new THREE.Vector3(1.1, SAND_TOP + 0.6, -0.95), new THREE.Vector3(2.6, SAND_TOP + 1.25, -0.2), 0.15, 0.08, 0.2);
+    branch(new THREE.Vector3(1.3, SAND_TOP + 0.3, -0.7), new THREE.Vector3(1.9, SAND_TOP + 0.9, 0.9), 0.12, 0.06, 0.18);
+  }
+
+  // ========== 鱼 ==========
+  function fishGeometry() {
+    const geo = new THREE.SphereGeometry(0.5, 16, 12);
+    const pos = geo.attributes.position;
+    const colors = [];
+    const v = new THREE.Vector3();
+    const silver = new THREE.Color(0xc9d8de);
+    const blue = new THREE.Color(0x2fa8ff);
+    const red = new THREE.Color(0xff2b40);
+    const white = new THREE.Color(0xeef6ff);
+
+    let minZ = Infinity, maxZ = -Infinity;
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i);
+      minZ = Math.min(minZ, v.z);
+      maxZ = Math.max(maxZ, v.z);
+    }
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i);
+      const t = (v.z - minZ) / (maxZ - minZ); // 0 头 -> 1 尾
+      // 拉长成鱼形：细长，不是蛋
+      const nx = v.x * 0.44;
+      const ny = v.y * 0.36;
+      const nz = v.z * 1.10;
+      pos.setXYZ(i, nx, ny, nz);
+
+      let c;
+      if (t > 0.55) {
+        c = red.clone().lerp(white, Math.max(0, (t - 0.95)) * 2);
+      } else {
+        c = silver.clone().lerp(blue, t * 0.55);
+      }
+      // 侧线高光
+      const sideLine = Math.abs(ny) < 0.05 ? 1 : 0;
+      if (sideLine && t < 0.6) c = blue.clone().lerp(white, 0.15);
+      colors.push(c.r, c.g, c.b);
+    }
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  function buildFish() {
+    fishGroup = new THREE.Group();
+    const bodyGeo = fishGeometry();
+    const bodyMat = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.35,
+      metalness: 0.25,
+      emissive: 0x0a2a3a,
+      emissiveIntensity: 0.35
+    });
+
+    // 尾巴
+    const tailGeo = new THREE.BufferGeometry();
+    tailGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+      0, 0, 0, 0, 0.22, 0.34, 0, -0.22, 0.34
+    ], 3));
+    tailGeo.setIndex([0, 1, 2]);
+    tailGeo.computeVertexNormals();
+    const tailMat = new THREE.MeshStandardMaterial({
+      color: 0xff3048, roughness: 0.5, metalness: 0.1,
+      side: THREE.DoubleSide, transparent: true, opacity: 0.92
+    });
+
+    const fishCount = 34;
+    for (let i = 0; i < fishCount; i++) {
+      const f = new THREE.Group();
+      const body = new THREE.Mesh(bodyGeo, bodyMat);
+      body.scale.setScalar(0.34 + Math.random() * 0.07);
+      f.add(body);
+
+      // 眼睛（跟着身体缩放）
+      const eyeGeo = new THREE.SphereGeometry(0.075, 8, 6);
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0x0a0f12 });
+      const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+      eyeL.position.set(0.20, 0.10, -0.68);
+      const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+      eyeR.position.set(-0.20, 0.10, -0.68);
+      body.add(eyeL); body.add(eyeR);
+
+      const tail = new THREE.Mesh(tailGeo, tailMat);
+      tail.position.z = 0.48;
+      tail.scale.setScalar(0.42);
+      f.add(tail);
+
+      f.userData = {
+        phase: Math.random() * Math.PI * 2,
+        radius: 1.0 + Math.random() * 2.0,
+        speed: 0.16 + Math.random() * 0.2,
+        yAmp: 0.18 + Math.random() * 0.28,
+        yOff: 0.85 + Math.random() * 1.35,
+        zOff: (Math.random() - 0.5) * 2.2,
+        tail: tail,
+        wobble: 0.6 + Math.random() * 0.9
+      };
+      f.position.set(0, 2, 0);
+      fishGroup.add(f);
+    }
+    scene.add(fishGroup);
+  }
+
+  // ========== 水（体积感）==========
+  function buildWater() {
+    // 水体雾：一个包裹缸内的半透明盒子，靠近玻璃处略带青色
+    const vol = new THREE.Mesh(
+      new THREE.BoxGeometry(TANK.w - 0.1, TANK.h - 0.1, TANK.d - 0.1),
+      new THREE.MeshBasicMaterial({
+        color: 0x0d3a3c,
+        transparent: true,
+        opacity: 0.10,
+        depthWrite: false,
+        side: THREE.BackSide
+      })
+    );
+    vol.position.y = 0;
+    vol.renderOrder = 2;
+    scene.add(vol);
+  }
+
+  // ========== 动画 ==========
+  let t = 0;
+  function animate() {
+    rafId = requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.05);
+    t += dt;
+
+    // 焦散时间
+    scene.traverse(o => {
+      if (o.isMesh && o.material && o.material.userData && o.material.userData.uTime) {
+        o.material.userData.uTime.value = t;
+      }
+    });
+
+    // 水面轻晃
+    const water = tankGroup && tankGroup.userData.water;
+    if (water) {
+      const base = tankGroup.userData.waterBase;
+      const p = water.geometry.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        const bx = base[i * 3], bz = base[i * 3 + 2];
+        p.setY(i, Math.sin(bx * 1.6 + t * 1.1) * 0.018 + Math.sin(bz * 2.1 - t * 0.8) * 0.014);
+      }
+      p.needsUpdate = true;
+      water.geometry.computeVertexNormals();
+    }
+
+    // 鱼群
+    if (fishGroup) {
+      fishGroup.children.forEach((f, i) => {
+        const u = f.userData;
+        const a = t * u.speed + u.phase;
+        const cx = Math.cos(a) * u.radius;
+        const cz = Math.sin(a) * u.radius * 0.55 + u.zOff;
+        const cy = u.yOff + Math.sin(a * 2.1 + u.phase) * u.yAmp;
+        f.position.set(cx, cy, cz);
+        const dx = -Math.sin(a) * u.radius;
+        const dz = Math.cos(a) * u.radius * 0.55;
+        const dy = Math.cos(a * 2.1 + u.phase) * 2.1 * u.yAmp;
+        f.lookAt(cx + dx * 0.6, cy + dy * 0.6, cz + dz * 0.6);
+        if (u.tail) u.tail.rotation.y = Math.sin(t * 7 * u.wobble + u.phase) * 0.45;
+      });
+    }
+
+    controls.update();
+    renderer.render(scene, camera);
+
+    // FPS
+    frameCount++;
+    fpsTime += dt;
+    if (fpsTime >= 0.5) {
+      fps = Math.round(frameCount / fpsTime);
+      frameCount = 0; fpsTime = 0;
+      if (showStats) updateStats();
+    }
+  }
+
+  function updateStats() {
+    const el = document.getElementById('stats');
+    if (!showStats) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.textContent =
+      'FPS   ' + fps + '\n' +
+      'draw  ' + renderer.info.render.calls + '\n' +
+      'tris  ' + (renderer.info.render.triangles / 1000).toFixed(0) + 'k\n' +
+      '鱼    26';
+  }
+
+  // ========== 交互 ==========
+  const viewPresets = [
+    { pos: [0.4, 3.4, 15.5], target: [0, 1.9, 0] },
+    { pos: [7.5, 2.6, 9.0], target: [0.5, 1.8, 0] },
+    { pos: [-1.5, 2.0, 10.5], target: [0, 2.1, 0] }
+  ];
+  let viewIdx = 0;
+
+  function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.classList.remove('show'), 1600);
+  }
+
+  function setScenery(hidden) {
+    sceneryHidden = hidden;
+    sceneryObjects.forEach(o => { o.visible = !hidden; });
+    const b = document.querySelector('.tool[data-act="scenery"]');
+    if (b) b.classList.toggle('active', hidden);
+  }
+
+  function bindUI() {
+    document.querySelectorAll('.tool[data-act]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const act = btn.dataset.act;
+        if (act === 'view') {
+          viewIdx = (viewIdx + 1) % viewPresets.length;
+          const v = viewPresets[viewIdx];
+          camera.position.set(v.pos[0], v.pos[1], v.pos[2]);
+          controls.target.set(v.target[0], v.target[1], v.target[2]);
+          toast('视角 ' + (viewIdx + 1) + ' / ' + viewPresets.length);
+          return;
+        }
+        if (act === 'reset') {
+          camera.position.set(viewPresets[0].pos[0], viewPresets[0].pos[1], viewPresets[0].pos[2]);
+          controls.target.set(0, 1.9, 0);
+          toast('已恢复初始视角');
+          return;
+        }
+        if (act === 'perf') {
+          showStats = !showStats;
+          btn.classList.toggle('active', showStats);
+          updateStats();
+          return;
+        }
+        if (act === 'scenery') {
+          setScenery(!sceneryHidden);
+          toast(sceneryHidden ? '造景已隐藏（水草 / 沉木 / 石头 / 底砂）' : '造景已显示');
+          return;
+        }
+        if (act === 'preset') {
+          toast('方案切换：后续接造景预设');
+          return;
+        }
+        const names = { algae: '藻类', fish: '生物', env: '环境', settings: '设置' };
+        toast((names[act] || act) + '：面板待接');
+      });
+    });
+  }
+
+  function onResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
